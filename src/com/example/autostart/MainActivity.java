@@ -1,13 +1,5 @@
 package com.example.autostart;
 
-import java.io.DataOutputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
 import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.ComponentName;
@@ -16,19 +8,27 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.ListView;
-import android.widget.ProgressBar;
-import android.widget.TextView;
-import android.widget.Toast;
+
+import java.io.DataOutputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 public class MainActivity extends Activity {
+    
+    private static final String LOG_TAG = "AutoRunManager";
+    
 	private ListView lv;          
 	private Button allowBt;       //允许列表显示按钮
 	private Button forbidBt;      //禁止列表显示按钮
@@ -40,13 +40,25 @@ public class MainActivity extends Activity {
 	Intent intent;
 	private ArrayList<HashMap<String, Object>> allowList;			//允许自启动应用信息保存
 	private ArrayList<HashMap<String, Object>> forbidList;			//禁止自启动应用信息保存
-	private List<ResolveInfo> allowInfoList; 						//获取自启动receiver的信息
-	private List<ResolveInfo> forbidInfoList; 						//获取包含被禁止自启动receiver的信息
+	private List<ResolveInfo> allowInfoList =new ArrayList<ResolveInfo>(); 	 //获取自启动receiver的信息
+	private List<ResolveInfo> forbidInfoList=new ArrayList<ResolveInfo>();  //获取包含被禁止自启动receiver的信息
 	private int flag;												//allowBt和forbidBt的点击记录，点击allowBt时为0，点击forbidBt时为1
 	protected static final int START = 0;							//显示progressdiaglog
 	protected static final int STOP = 1;							//关闭progressdiaglog
 	protected static final int PROCESS = 2;							//progressdiaglog
+
 	private static HashMap<Integer,Boolean> isSelected; 			//保存checkbox的点击信息
+	
+    private List<Intent> mForbiddenIntent;
+    private String[] mForbiddenReceiver = new String[] {
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_SCREEN_ON,
+            Intent.ACTION_SCREEN_OFF,
+            Intent.ACTION_BATTERY_CHANGED,
+            Intent.ACTION_BATTERY_LOW,
+            Intent.ACTION_BATTERY_OKAY
+    };
+	 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -54,6 +66,15 @@ public class MainActivity extends Activity {
 		//各种初始化
 		flag = 0;
 		context = this;
+		this.startService(new Intent(context, BootTestService.class));
+		
+	    mForbiddenIntent = new ArrayList<Intent>();
+        for (String forbiddenAction : mForbiddenReceiver)
+        {
+            Intent forbiddenIntent = new Intent(forbiddenAction);
+            mForbiddenIntent.add(forbiddenIntent);
+        }
+		
 		lv = (ListView) findViewById(R.id.lv);
 		allowBt = (Button) findViewById(R.id.allow_bt);
 		forbidBt = (Button) findViewById(R.id.forbid_bt);
@@ -197,8 +218,14 @@ public class MainActivity extends Activity {
 	
 	//allowList的更新操作
 	public void updateAllowList(){
-		//获取自启动receiver的信息
-		allowInfoList = mPackageManager.queryBroadcastReceivers(intent,PackageManager.GET_RECEIVERS);
+        // 获取自启动receiver的信息
+        for (Intent forbiddenIntent : mForbiddenIntent)
+        {
+            List<ResolveInfo> allowReceivers = mPackageManager.queryBroadcastReceivers(
+                    forbiddenIntent,
+                    PackageManager.GET_RECEIVERS);
+            allowInfoList.addAll(allowReceivers);
+        }
 		int k = 0;
 		//去除系统应用receiver
 		while(k < allowInfoList.size()){
@@ -249,7 +276,13 @@ public class MainActivity extends Activity {
 	//forbidList的更新操作
 	public void updateForbidList(){
 		//获取包含被禁止自启动receiver的信息
-		forbidInfoList = mPackageManager.queryBroadcastReceivers(intent,PackageManager.GET_DISABLED_COMPONENTS);
+	    for (Intent forbiddenIntent : mForbiddenIntent)
+        {
+            List<ResolveInfo> forbiddenReceivers = mPackageManager.queryBroadcastReceivers(
+                forbiddenIntent,
+                PackageManager.GET_DISABLED_COMPONENTS);
+            forbidInfoList.addAll(forbiddenReceivers);
+        }
 		int k = 0;
 		//去除系统应用receiver以及允许自启动的receiver
 		while(k < forbidInfoList.size()){
@@ -304,6 +337,8 @@ public class MainActivity extends Activity {
 	
 	//用root权限执行外部命令"pm disable"和"pm enable"
 	public static boolean execCmd(String cmd) {
+	    Log.d(LOG_TAG,"pm cmd = "+cmd);
+	    //07-22 18:34:42.902: D/AutoRunManager(26753): pm cmd = pm enable com.chaozh.iReaderFree/com.igexin.sdk.SdkReceiver
 	    Process process = null;
 	    DataOutputStream os = null;
 	    try {

@@ -71,6 +71,7 @@ public class MyAdapter extends BaseAdapter{
             convertView = inflater.inflate(R.layout.list, null); 
             holder.img = (ImageView) convertView.findViewById(R.id.img);
             holder.tv = (TextView) convertView.findViewById(R.id.tv);  
+            holder.receivers = (TextView) convertView.findViewById(R.id.receivers);  
             holder.cb = (CheckBox) convertView.findViewById(R.id.cb);  
             // 为view设置标签  
             convertView.setTag(holder);  
@@ -81,6 +82,7 @@ public class MyAdapter extends BaseAdapter{
         holder.img.setImageDrawable((Drawable) list.get(position).get("icon"));
         // 设置list中TextView的显示  
         holder.tv.setText(list.get(position).get("appName").toString());  
+        holder.receivers.setText(list.get(position).get("packageReceiver").toString());  
         // 根据isSelected来设置checkbox的选中状况  
         holder.cb.setChecked(getIsSelected().get(position));  
         return convertView;  
